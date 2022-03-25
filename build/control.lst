@@ -1,0 +1,1154 @@
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 1
+
+
+   1              		.cpu cortex-m7
+   2              		.eabi_attribute 28, 1
+   3              		.eabi_attribute 20, 1
+   4              		.eabi_attribute 21, 1
+   5              		.eabi_attribute 23, 3
+   6              		.eabi_attribute 24, 1
+   7              		.eabi_attribute 25, 1
+   8              		.eabi_attribute 26, 1
+   9              		.eabi_attribute 30, 1
+  10              		.eabi_attribute 34, 1
+  11              		.eabi_attribute 18, 4
+  12              		.file	"control.c"
+  13              		.text
+  14              	.Ltext0:
+  15              		.cfi_sections	.debug_frame
+  16              		.section	.text.chassis_init,"ax",%progbits
+  17              		.align	1
+  18              		.global	chassis_init
+  19              		.arch armv7e-m
+  20              		.syntax unified
+  21              		.thumb
+  22              		.thumb_func
+  23              		.fpu fpv5-d16
+  25              	chassis_init:
+  26              	.LFB187:
+  27              		.file 1 "User/Src/control.c"
+   1:User/Src/control.c **** #include "control.h"
+   2:User/Src/control.c **** #include "motor.h"
+   3:User/Src/control.c **** #include "bsp_can.h"
+   4:User/Src/control.c **** #include "main.h"
+   5:User/Src/control.c **** 
+   6:User/Src/control.c **** 
+   7:User/Src/control.c **** extern uint32_t channel_info[12];
+   8:User/Src/control.c **** extern Motor motor[3];
+   9:User/Src/control.c **** extern UART_HandleTypeDef huart1;
+  10:User/Src/control.c **** extern void uart_printf(UART_HandleTypeDef *huart, char *fmt ,...);
+  11:User/Src/control.c **** extern volatile uint16_t status[3];
+  12:User/Src/control.c **** extern float input_vel[3];
+  13:User/Src/control.c **** extern OdriveAxisSetState_t odrive_set_axis[3];
+  14:User/Src/control.c **** float last_angle1;
+  15:User/Src/control.c **** float temp = 0.0f;
+  16:User/Src/control.c **** float target_angle1 = 0.0f;
+  17:User/Src/control.c **** float last_info = 1499.0f;
+  18:User/Src/control.c **** float target_speed[3];
+  19:User/Src/control.c **** float chassis_pos;
+  20:User/Src/control.c **** float32_t ref_angle[3];
+  21:User/Src/control.c **** extern int mode_flag;	//1:速度控制模式   0:位置控制模式
+  22:User/Src/control.c **** 
+  23:User/Src/control.c **** 
+  24:User/Src/control.c **** void func1(uint32_t r_info1, uint32_t r_info2){ //r_info1为左右信息，r_info2为上下信息
+  25:User/Src/control.c **** 	if(r_info1 && r_info2){
+  26:User/Src/control.c **** 		if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) < 30){
+  27:User/Src/control.c **** 			for(int i = 0; i < 3; i++){
+  28:User/Src/control.c **** 				ref_angle[i] = 0.0;
+  29:User/Src/control.c **** 				input_vel[i] = 0.0;
+  30:User/Src/control.c **** 			}
+  31:User/Src/control.c **** 		}
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 2
+
+
+  32:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) > 30 && f32_abs((float)r_info2 - 1500) < 30){
+  33:User/Src/control.c **** 			if((float)r_info1 - 1500 > 0){
+  34:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+  35:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(90);
+  36:User/Src/control.c **** 					input_vel[i] = (float)(r_info1 - 1500) / 6.25;
+  37:User/Src/control.c **** 			}
+  38:User/Src/control.c **** 		}
+  39:User/Src/control.c **** 			else{
+  40:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+  41:User/Src/control.c **** 				ref_angle[i] = get_chassis_pos(-90); 
+  42:User/Src/control.c **** 				input_vel[i] = (float)(1500 - r_info1) / 6.25;
+  43:User/Src/control.c **** 			}
+  44:User/Src/control.c **** 		}
+  45:User/Src/control.c **** 	}
+  46:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) > 30){
+  47:User/Src/control.c **** 			if((float)r_info2 - 1500 > 0){
+  48:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+  49:User/Src/control.c **** 					ref_angle[i] = 0.0;
+  50:User/Src/control.c **** 					input_vel[i] = (float)(r_info2 - 1500) / 6.25;
+  51:User/Src/control.c **** 		}
+  52:User/Src/control.c **** 	}
+  53:User/Src/control.c **** 			else{
+  54:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+  55:User/Src/control.c **** 					ref_angle[i] = 0.0;
+  56:User/Src/control.c **** 					input_vel[i] = -(float)(1500 - r_info2) / 6.25;
+  57:User/Src/control.c **** 		}
+  58:User/Src/control.c **** 			}
+  59:User/Src/control.c **** 		}
+  60:User/Src/control.c **** 		else{
+  61:User/Src/control.c **** 			if((float)r_info2 - 1500 > 0){
+  62:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+  63:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+  64:User/Src/control.c **** 					input_vel[i] = sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0)
+  65:User/Src/control.c **** 			}
+  66:User/Src/control.c **** 			}
+  67:User/Src/control.c **** 			else{
+  68:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+  69:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+  70:User/Src/control.c **** 					input_vel[i] = -sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0
+  71:User/Src/control.c **** 			}
+  72:User/Src/control.c **** 			}
+  73:User/Src/control.c **** 		}
+  74:User/Src/control.c **** 		}
+  75:User/Src/control.c **** 	}
+  76:User/Src/control.c **** 
+  77:User/Src/control.c **** 	
+  78:User/Src/control.c **** void cmd_all(float32_t ref_angle[], float input_vel[]){
+  79:User/Src/control.c **** 	for(int i = 0; i<3; i++){
+  80:User/Src/control.c **** 		motor[i].target_angle = get_chassis_pos(ref_angle[i]*120);
+  81:User/Src/control.c **** 		odrive_set_axis[i].input_vel = input_vel[i];
+  82:User/Src/control.c **** 	}
+  83:User/Src/control.c **** 	odrv_write_msg(AXIS_0, MSG_SET_INPUT_VEL);
+  84:User/Src/control.c **** 	odrv_write_msg(AXIS_1, MSG_SET_INPUT_VEL);
+  85:User/Src/control.c **** 	odrv_write_msg(AXIS_2, MSG_SET_INPUT_VEL);
+  86:User/Src/control.c **** }
+  87:User/Src/control.c **** void chassis_init(void){
+  28              		.loc 1 87 24 view -0
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 3
+
+
+  29              		.cfi_startproc
+  30              		@ args = 0, pretend = 0, frame = 0
+  31              		@ frame_needed = 0, uses_anonymous_args = 0
+  32 0000 10B5     		push	{r4, lr}
+  33              	.LCFI0:
+  34              		.cfi_def_cfa_offset 8
+  35              		.cfi_offset 4, -8
+  36              		.cfi_offset 14, -4
+  88:User/Src/control.c **** 	mode_flag = 1;
+  37              		.loc 1 88 2 view .LVU1
+  38              		.loc 1 88 12 is_stmt 0 view .LVU2
+  39 0002 0D4B     		ldr	r3, .L5
+  40 0004 0122     		movs	r2, #1
+  41 0006 1A60     		str	r2, [r3]
+  89:User/Src/control.c **** 	for(int i = 0; i < 3; i++){
+  42              		.loc 1 89 2 is_stmt 1 view .LVU3
+  43              	.LBB2:
+  44              		.loc 1 89 6 view .LVU4
+  45              	.LVL0:
+  46              		.loc 1 89 10 is_stmt 0 view .LVU5
+  47 0008 0024     		movs	r4, #0
+  48              		.loc 1 89 2 view .LVU6
+  49 000a 0EE0     		b	.L2
+  50              	.LVL1:
+  51              	.L3:
+  90:User/Src/control.c **** 		target_speed[i] = 1500.0f;
+  52              		.loc 1 90 3 is_stmt 1 discriminator 3 view .LVU7
+  53              		.loc 1 90 19 is_stmt 0 discriminator 3 view .LVU8
+  54 000c 0B4B     		ldr	r3, .L5+4
+  55 000e 03EB8403 		add	r3, r3, r4, lsl #2
+  56 0012 9FED0B0A 		vldr.32	s0, .L5+8
+  57 0016 83ED000A 		vstr.32	s0, [r3]
+  91:User/Src/control.c **** 		set_speed(motor+i, target_speed[i]);
+  58              		.loc 1 91 3 is_stmt 1 discriminator 3 view .LVU9
+  59              		.loc 1 91 18 is_stmt 0 discriminator 3 view .LVU10
+  60 001a 04EBC402 		add	r2, r4, r4, lsl #3
+  61 001e 9300     		lsls	r3, r2, #2
+  62              		.loc 1 91 3 discriminator 3 view .LVU11
+  63 0020 0848     		ldr	r0, .L5+12
+  64 0022 1844     		add	r0, r0, r3
+  65 0024 FFF7FEFF 		bl	set_speed
+  66              	.LVL2:
+  89:User/Src/control.c **** 	for(int i = 0; i < 3; i++){
+  67              		.loc 1 89 24 is_stmt 1 discriminator 3 view .LVU12
+  89:User/Src/control.c **** 	for(int i = 0; i < 3; i++){
+  68              		.loc 1 89 25 is_stmt 0 discriminator 3 view .LVU13
+  69 0028 0134     		adds	r4, r4, #1
+  70              	.LVL3:
+  71              	.L2:
+  89:User/Src/control.c **** 	for(int i = 0; i < 3; i++){
+  72              		.loc 1 89 17 is_stmt 1 discriminator 1 view .LVU14
+  89:User/Src/control.c **** 	for(int i = 0; i < 3; i++){
+  73              		.loc 1 89 2 is_stmt 0 discriminator 1 view .LVU15
+  74 002a 022C     		cmp	r4, #2
+  75 002c EEDD     		ble	.L3
+  76              	.LBE2:
+  92:User/Src/control.c **** 	}
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 4
+
+
+  93:User/Src/control.c **** 	angle_detect(motor);
+  77              		.loc 1 93 2 is_stmt 1 view .LVU16
+  78 002e 0548     		ldr	r0, .L5+12
+  79 0030 FFF7FEFF 		bl	angle_detect
+  80              	.LVL4:
+  94:User/Src/control.c **** } 
+  81              		.loc 1 94 1 is_stmt 0 view .LVU17
+  82 0034 10BD     		pop	{r4, pc}
+  83              	.LVL5:
+  84              	.L6:
+  85              		.loc 1 94 1 view .LVU18
+  86 0036 00BF     		.align	2
+  87              	.L5:
+  88 0038 00000000 		.word	mode_flag
+  89 003c 00000000 		.word	.LANCHOR0
+  90 0040 0080BB44 		.word	1153138688
+  91 0044 00000000 		.word	motor
+  92              		.cfi_endproc
+  93              	.LFE187:
+  95              		.section	.text.get_chassis_pos,"ax",%progbits
+  96              		.align	1
+  97              		.global	get_chassis_pos
+  98              		.syntax unified
+  99              		.thumb
+ 100              		.thumb_func
+ 101              		.fpu fpv5-d16
+ 103              	get_chassis_pos:
+ 104              	.LVL6:
+ 105              	.LFB188:
+  95:User/Src/control.c **** 
+  96:User/Src/control.c **** float get_chassis_pos(float angle){
+ 106              		.loc 1 96 35 is_stmt 1 view -0
+ 107              		.cfi_startproc
+ 108              		@ args = 0, pretend = 0, frame = 0
+ 109              		@ frame_needed = 0, uses_anonymous_args = 0
+ 110              		@ link register save eliminated.
+  97:User/Src/control.c **** 		chassis_pos = angle;	//对电机绝对角度进行处理，转化成在底盘上的角度
+ 111              		.loc 1 97 3 view .LVU20
+ 112              		.loc 1 97 15 is_stmt 0 view .LVU21
+ 113 0000 014B     		ldr	r3, .L8
+ 114 0002 83ED000A 		vstr.32	s0, [r3]
+  98:User/Src/control.c **** 		return chassis_pos;
+ 115              		.loc 1 98 3 is_stmt 1 view .LVU22
+  99:User/Src/control.c **** }...
+ 116              		.loc 1 99 1 is_stmt 0 view .LVU23
+ 117 0006 7047     		bx	lr
+ 118              	.L9:
+ 119              		.align	2
+ 120              	.L8:
+ 121 0008 00000000 		.word	.LANCHOR1
+ 122              		.cfi_endproc
+ 123              	.LFE188:
+ 125              		.section	.text.func1,"ax",%progbits
+ 126              		.align	1
+ 127              		.global	func1
+ 128              		.syntax unified
+ 129              		.thumb
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 5
+
+
+ 130              		.thumb_func
+ 131              		.fpu fpv5-d16
+ 133              	func1:
+ 134              	.LVL7:
+ 135              	.LFB185:
+  24:User/Src/control.c **** void func1(uint32_t r_info1, uint32_t r_info2){ //r_info1为左右信息，r_info2为上下信息
+ 136              		.loc 1 24 47 is_stmt 1 view -0
+ 137              		.cfi_startproc
+ 138              		@ args = 0, pretend = 0, frame = 8
+ 139              		@ frame_needed = 0, uses_anonymous_args = 0
+  24:User/Src/control.c **** void func1(uint32_t r_info1, uint32_t r_info2){ //r_info1为左右信息，r_info2为上下信息
+ 140              		.loc 1 24 47 is_stmt 0 view .LVU25
+ 141 0000 30B5     		push	{r4, r5, lr}
+ 142              	.LCFI1:
+ 143              		.cfi_def_cfa_offset 12
+ 144              		.cfi_offset 4, -12
+ 145              		.cfi_offset 5, -8
+ 146              		.cfi_offset 14, -4
+ 147 0002 2DED048B 		vpush.64	{d8, d9}
+ 148              	.LCFI2:
+ 149              		.cfi_def_cfa_offset 28
+ 150              		.cfi_offset 80, -28
+ 151              		.cfi_offset 81, -24
+ 152              		.cfi_offset 82, -20
+ 153              		.cfi_offset 83, -16
+ 154 0006 83B0     		sub	sp, sp, #12
+ 155              	.LCFI3:
+ 156              		.cfi_def_cfa_offset 40
+  25:User/Src/control.c **** 	if(r_info1 && r_info2){
+ 157              		.loc 1 25 2 is_stmt 1 view .LVU26
+  25:User/Src/control.c **** 	if(r_info1 && r_info2){
+ 158              		.loc 1 25 13 is_stmt 0 view .LVU27
+ 159 0008 0191     		str	r1, [sp, #4]
+  25:User/Src/control.c **** 	if(r_info1 && r_info2){
+ 160              		.loc 1 25 4 view .LVU28
+ 161 000a 0028     		cmp	r0, #0
+ 162 000c 18BF     		it	ne
+ 163 000e 0029     		cmpne	r1, #0
+ 164 0010 03D1     		bne	.L44
+ 165              	.LVL8:
+ 166              	.L10:
+  75:User/Src/control.c **** 	}
+ 167              		.loc 1 75 2 view .LVU29
+ 168 0012 03B0     		add	sp, sp, #12
+ 169              	.LCFI4:
+ 170              		.cfi_remember_state
+ 171              		.cfi_def_cfa_offset 28
+ 172              		@ sp needed
+ 173 0014 BDEC048B 		vldm	sp!, {d8-d9}
+ 174              	.LCFI5:
+ 175              		.cfi_restore 82
+ 176              		.cfi_restore 83
+ 177              		.cfi_restore 80
+ 178              		.cfi_restore 81
+ 179              		.cfi_def_cfa_offset 12
+ 180 0018 30BD     		pop	{r4, r5, pc}
+ 181              	.LVL9:
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 6
+
+
+ 182              	.L44:
+ 183              	.LCFI6:
+ 184              		.cfi_restore_state
+  75:User/Src/control.c **** 	}
+ 185              		.loc 1 75 2 view .LVU30
+ 186 001a 0446     		mov	r4, r0
+  26:User/Src/control.c **** 		if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 187              		.loc 1 26 3 is_stmt 1 view .LVU31
+  26:User/Src/control.c **** 		if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 188              		.loc 1 26 14 is_stmt 0 view .LVU32
+ 189 001c 07EE900A 		vmov	s15, r0	@ int
+ 190 0020 F8EE678A 		vcvt.f32.u32	s17, s15
+  26:User/Src/control.c **** 		if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 191              		.loc 1 26 6 view .LVU33
+ 192 0024 DFEDBC7A 		vldr.32	s15, .L49+8
+ 193 0028 78EEE78A 		vsub.f32	s17, s17, s15
+ 194 002c B0EE680A 		vmov.f32	s0, s17
+ 195 0030 FFF7FEFF 		bl	f32_abs
+ 196              	.LVL10:
+  26:User/Src/control.c **** 		if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 197              		.loc 1 26 5 view .LVU34
+ 198 0034 F3EE0E7A 		vmov.f32	s15, #3.0e+1
+ 199 0038 B4EEE70A 		vcmpe.f32	s0, s15
+ 200 003c F1EE10FA 		vmrs	APSR_nzcv, FPSCR
+ 201 0040 10D5     		bpl	.L12
+  26:User/Src/control.c **** 		if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 202              		.loc 1 26 53 discriminator 1 view .LVU35
+ 203 0042 DDED017A 		vldr.32	s15, [sp, #4]	@ int
+ 204 0046 F8EE677A 		vcvt.f32.u32	s15, s15
+  26:User/Src/control.c **** 		if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 205              		.loc 1 26 45 discriminator 1 view .LVU36
+ 206 004a 9FEDB30A 		vldr.32	s0, .L49+8
+ 207 004e 37EEC00A 		vsub.f32	s0, s15, s0
+ 208 0052 FFF7FEFF 		bl	f32_abs
+ 209              	.LVL11:
+  26:User/Src/control.c **** 		if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 210              		.loc 1 26 42 discriminator 1 view .LVU37
+ 211 0056 F3EE0E7A 		vmov.f32	s15, #3.0e+1
+ 212 005a B4EEE70A 		vcmpe.f32	s0, s15
+ 213 005e F1EE10FA 		vmrs	APSR_nzcv, FPSCR
+ 214 0062 2FD4     		bmi	.L34
+ 215              	.L12:
+  32:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) > 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 216              		.loc 1 32 8 is_stmt 1 view .LVU38
+  32:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) > 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 217              		.loc 1 32 11 is_stmt 0 view .LVU39
+ 218 0064 B0EE680A 		vmov.f32	s0, s17
+ 219 0068 FFF7FEFF 		bl	f32_abs
+ 220              	.LVL12:
+  32:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) > 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 221              		.loc 1 32 10 view .LVU40
+ 222 006c F3EE0E7A 		vmov.f32	s15, #3.0e+1
+ 223 0070 B4EEE70A 		vcmpe.f32	s0, s15
+ 224 0074 F1EE10FA 		vmrs	APSR_nzcv, FPSCR
+ 225 0078 61DD     		ble	.L16
+  32:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) > 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 226              		.loc 1 32 58 discriminator 1 view .LVU41
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 7
+
+
+ 227 007a DDED017A 		vldr.32	s15, [sp, #4]	@ int
+ 228 007e F8EE677A 		vcvt.f32.u32	s15, s15
+  32:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) > 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 229              		.loc 1 32 50 discriminator 1 view .LVU42
+ 230 0082 9FEDA50A 		vldr.32	s0, .L49+8
+ 231 0086 37EEC00A 		vsub.f32	s0, s15, s0
+ 232 008a FFF7FEFF 		bl	f32_abs
+ 233              	.LVL13:
+  32:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) > 30 && f32_abs((float)r_info2 - 1500) < 30){
+ 234              		.loc 1 32 47 discriminator 1 view .LVU43
+ 235 008e F3EE0E7A 		vmov.f32	s15, #3.0e+1
+ 236 0092 B4EEE70A 		vcmpe.f32	s0, s15
+ 237 0096 F1EE10FA 		vmrs	APSR_nzcv, FPSCR
+ 238 009a 50D5     		bpl	.L16
+  33:User/Src/control.c **** 			if((float)r_info1 - 1500 > 0){
+ 239              		.loc 1 33 4 is_stmt 1 view .LVU44
+  33:User/Src/control.c **** 			if((float)r_info1 - 1500 > 0){
+ 240              		.loc 1 33 6 is_stmt 0 view .LVU45
+ 241 009c F5EEC08A 		vcmpe.f32	s17, #0
+ 242 00a0 F1EE10FA 		vmrs	APSR_nzcv, FPSCR
+ 243 00a4 10DD     		ble	.L45
+ 244              	.LBB3:
+  34:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 245              		.loc 1 34 13 view .LVU46
+ 246 00a6 0025     		movs	r5, #0
+ 247 00a8 29E0     		b	.L19
+ 248              	.LVL14:
+ 249              	.L15:
+  34:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 250              		.loc 1 34 13 view .LVU47
+ 251              	.LBE3:
+ 252              	.LBB4:
+  28:User/Src/control.c **** 				ref_angle[i] = 0.0;
+ 253              		.loc 1 28 5 is_stmt 1 discriminator 3 view .LVU48
+  28:User/Src/control.c **** 				ref_angle[i] = 0.0;
+ 254              		.loc 1 28 18 is_stmt 0 discriminator 3 view .LVU49
+ 255 00aa 9C4A     		ldr	r2, .L49+12
+ 256 00ac 02EB8302 		add	r2, r2, r3, lsl #2
+ 257 00b0 0021     		movs	r1, #0
+ 258 00b2 1160     		str	r1, [r2]	@ float
+  29:User/Src/control.c **** 				input_vel[i] = 0.0;
+ 259              		.loc 1 29 5 is_stmt 1 discriminator 3 view .LVU50
+  29:User/Src/control.c **** 				input_vel[i] = 0.0;
+ 260              		.loc 1 29 18 is_stmt 0 discriminator 3 view .LVU51
+ 261 00b4 9A4A     		ldr	r2, .L49+16
+ 262 00b6 02EB8302 		add	r2, r2, r3, lsl #2
+ 263 00ba 1160     		str	r1, [r2]	@ float
+  27:User/Src/control.c **** 			for(int i = 0; i < 3; i++){
+ 264              		.loc 1 27 26 is_stmt 1 discriminator 3 view .LVU52
+  27:User/Src/control.c **** 			for(int i = 0; i < 3; i++){
+ 265              		.loc 1 27 27 is_stmt 0 discriminator 3 view .LVU53
+ 266 00bc 0133     		adds	r3, r3, #1
+ 267              	.LVL15:
+ 268              	.L14:
+  27:User/Src/control.c **** 			for(int i = 0; i < 3; i++){
+ 269              		.loc 1 27 19 is_stmt 1 discriminator 1 view .LVU54
+  27:User/Src/control.c **** 			for(int i = 0; i < 3; i++){
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 8
+
+
+ 270              		.loc 1 27 4 is_stmt 0 discriminator 1 view .LVU55
+ 271 00be 022B     		cmp	r3, #2
+ 272 00c0 F3DD     		ble	.L15
+ 273 00c2 A6E7     		b	.L10
+ 274              	.LVL16:
+ 275              	.L34:
+  27:User/Src/control.c **** 			for(int i = 0; i < 3; i++){
+ 276              		.loc 1 27 12 view .LVU56
+ 277 00c4 0023     		movs	r3, #0
+ 278 00c6 FAE7     		b	.L14
+ 279              	.L45:
+ 280              	.LBE4:
+ 281              	.LBB5:
+  40:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 282              		.loc 1 40 13 view .LVU57
+ 283 00c8 0025     		movs	r5, #0
+ 284 00ca 35E0     		b	.L20
+ 285              	.LVL17:
+ 286              	.L21:
+  40:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 287              		.loc 1 40 13 view .LVU58
+ 288              	.LBE5:
+ 289              	.LBB6:
+  35:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(90);
+ 290              		.loc 1 35 6 is_stmt 1 discriminator 3 view .LVU59
+  35:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(90);
+ 291              		.loc 1 35 21 is_stmt 0 discriminator 3 view .LVU60
+ 292 00cc 9FED950A 		vldr.32	s0, .L49+20
+ 293 00d0 FFF7FEFF 		bl	get_chassis_pos
+ 294              	.LVL18:
+  35:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(90);
+ 295              		.loc 1 35 19 discriminator 3 view .LVU61
+ 296 00d4 914B     		ldr	r3, .L49+12
+ 297 00d6 03EB8503 		add	r3, r3, r5, lsl #2
+ 298 00da 83ED000A 		vstr.32	s0, [r3]
+  36:User/Src/control.c **** 					input_vel[i] = (float)(r_info1 - 1500) / 6.25;
+ 299              		.loc 1 36 6 is_stmt 1 discriminator 3 view .LVU62
+  36:User/Src/control.c **** 					input_vel[i] = (float)(r_info1 - 1500) / 6.25;
+ 300              		.loc 1 36 37 is_stmt 0 discriminator 3 view .LVU63
+ 301 00de A4F2DC53 		subw	r3, r4, #1500
+ 302 00e2 07EE903A 		vmov	s15, r3	@ int
+  36:User/Src/control.c **** 					input_vel[i] = (float)(r_info1 - 1500) / 6.25;
+ 303              		.loc 1 36 21 discriminator 3 view .LVU64
+ 304 00e6 F8EE677A 		vcvt.f32.u32	s15, s15
+  36:User/Src/control.c **** 					input_vel[i] = (float)(r_info1 - 1500) / 6.25;
+ 305              		.loc 1 36 45 discriminator 3 view .LVU65
+ 306 00ea F1EE096A 		vmov.f32	s13, #6.25e+0
+ 307 00ee 87EEA67A 		vdiv.f32	s14, s15, s13
+  36:User/Src/control.c **** 					input_vel[i] = (float)(r_info1 - 1500) / 6.25;
+ 308              		.loc 1 36 19 discriminator 3 view .LVU66
+ 309 00f2 8B4B     		ldr	r3, .L49+16
+ 310 00f4 03EB8503 		add	r3, r3, r5, lsl #2
+ 311 00f8 83ED007A 		vstr.32	s14, [r3]
+  34:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 312              		.loc 1 34 27 is_stmt 1 discriminator 3 view .LVU67
+  34:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 313              		.loc 1 34 28 is_stmt 0 discriminator 3 view .LVU68
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 9
+
+
+ 314 00fc 0135     		adds	r5, r5, #1
+ 315              	.LVL19:
+ 316              	.L19:
+  34:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 317              		.loc 1 34 20 is_stmt 1 discriminator 1 view .LVU69
+  34:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 318              		.loc 1 34 5 is_stmt 0 discriminator 1 view .LVU70
+ 319 00fe 022D     		cmp	r5, #2
+ 320 0100 E4DD     		ble	.L21
+ 321 0102 86E7     		b	.L10
+ 322              	.LVL20:
+ 323              	.L22:
+  34:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 324              		.loc 1 34 5 discriminator 1 view .LVU71
+ 325              	.LBE6:
+ 326              	.LBB7:
+  41:User/Src/control.c **** 				ref_angle[i] = get_chassis_pos(-90); 
+ 327              		.loc 1 41 5 is_stmt 1 discriminator 3 view .LVU72
+  41:User/Src/control.c **** 				ref_angle[i] = get_chassis_pos(-90); 
+ 328              		.loc 1 41 20 is_stmt 0 discriminator 3 view .LVU73
+ 329 0104 9FED880A 		vldr.32	s0, .L49+24
+ 330 0108 FFF7FEFF 		bl	get_chassis_pos
+ 331              	.LVL21:
+  41:User/Src/control.c **** 				ref_angle[i] = get_chassis_pos(-90); 
+ 332              		.loc 1 41 18 discriminator 3 view .LVU74
+ 333 010c 834B     		ldr	r3, .L49+12
+ 334 010e 03EB8503 		add	r3, r3, r5, lsl #2
+ 335 0112 83ED000A 		vstr.32	s0, [r3]
+  42:User/Src/control.c **** 				input_vel[i] = (float)(1500 - r_info1) / 6.25;
+ 336              		.loc 1 42 5 is_stmt 1 discriminator 3 view .LVU75
+  42:User/Src/control.c **** 				input_vel[i] = (float)(1500 - r_info1) / 6.25;
+ 337              		.loc 1 42 33 is_stmt 0 discriminator 3 view .LVU76
+ 338 0116 40F2DC53 		movw	r3, #1500
+ 339 011a 1B1B     		subs	r3, r3, r4
+  42:User/Src/control.c **** 				input_vel[i] = (float)(1500 - r_info1) / 6.25;
+ 340              		.loc 1 42 20 discriminator 3 view .LVU77
+ 341 011c 07EE903A 		vmov	s15, r3	@ int
+ 342 0120 F8EE677A 		vcvt.f32.u32	s15, s15
+  42:User/Src/control.c **** 				input_vel[i] = (float)(1500 - r_info1) / 6.25;
+ 343              		.loc 1 42 44 discriminator 3 view .LVU78
+ 344 0124 F1EE096A 		vmov.f32	s13, #6.25e+0
+ 345 0128 87EEA67A 		vdiv.f32	s14, s15, s13
+  42:User/Src/control.c **** 				input_vel[i] = (float)(1500 - r_info1) / 6.25;
+ 346              		.loc 1 42 18 discriminator 3 view .LVU79
+ 347 012c 7C4B     		ldr	r3, .L49+16
+ 348 012e 03EB8503 		add	r3, r3, r5, lsl #2
+ 349 0132 83ED007A 		vstr.32	s14, [r3]
+  40:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 350              		.loc 1 40 27 is_stmt 1 discriminator 3 view .LVU80
+  40:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 351              		.loc 1 40 28 is_stmt 0 discriminator 3 view .LVU81
+ 352 0136 0135     		adds	r5, r5, #1
+ 353              	.LVL22:
+ 354              	.L20:
+  40:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 355              		.loc 1 40 20 is_stmt 1 discriminator 1 view .LVU82
+  40:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 10
+
+
+ 356              		.loc 1 40 5 is_stmt 0 discriminator 1 view .LVU83
+ 357 0138 022D     		cmp	r5, #2
+ 358 013a E3DD     		ble	.L22
+ 359 013c 69E7     		b	.L10
+ 360              	.LVL23:
+ 361              	.L16:
+  40:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 362              		.loc 1 40 5 discriminator 1 view .LVU84
+ 363              	.LBE7:
+  46:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) > 30){
+ 364              		.loc 1 46 8 is_stmt 1 view .LVU85
+  46:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) > 30){
+ 365              		.loc 1 46 11 is_stmt 0 view .LVU86
+ 366 013e B0EE680A 		vmov.f32	s0, s17
+ 367 0142 FFF7FEFF 		bl	f32_abs
+ 368              	.LVL24:
+  46:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) > 30){
+ 369              		.loc 1 46 10 view .LVU87
+ 370 0146 F3EE0E7A 		vmov.f32	s15, #3.0e+1
+ 371 014a B4EEE70A 		vcmpe.f32	s0, s15
+ 372 014e F1EE10FA 		vmrs	APSR_nzcv, FPSCR
+ 373 0152 4BD4     		bmi	.L46
+ 374              	.L23:
+  61:User/Src/control.c **** 			if((float)r_info2 - 1500 > 0){
+ 375              		.loc 1 61 4 is_stmt 1 view .LVU88
+  61:User/Src/control.c **** 			if((float)r_info2 - 1500 > 0){
+ 376              		.loc 1 61 7 is_stmt 0 view .LVU89
+ 377 0154 DDED017A 		vldr.32	s15, [sp, #4]	@ int
+ 378 0158 B8EE678A 		vcvt.f32.u32	s16, s15
+  61:User/Src/control.c **** 			if((float)r_info2 - 1500 > 0){
+ 379              		.loc 1 61 22 view .LVU90
+ 380 015c DFED6E7A 		vldr.32	s15, .L49+8
+ 381 0160 38EE678A 		vsub.f32	s16, s16, s15
+  61:User/Src/control.c **** 			if((float)r_info2 - 1500 > 0){
+ 382              		.loc 1 61 6 view .LVU91
+ 383 0164 B5EEC08A 		vcmpe.f32	s16, #0
+ 384 0168 F1EE10FA 		vmrs	APSR_nzcv, FPSCR
+ 385 016c 40F38F80 		ble	.L47
+ 386              	.LBB8:
+  62:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 387              		.loc 1 62 13 view .LVU92
+ 388 0170 0024     		movs	r4, #0
+ 389              	.LVL25:
+ 390              	.L30:
+  62:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 391              		.loc 1 62 20 is_stmt 1 discriminator 1 view .LVU93
+  62:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 392              		.loc 1 62 5 is_stmt 0 discriminator 1 view .LVU94
+ 393 0172 022C     		cmp	r4, #2
+ 394 0174 3FF74DAF 		bgt	.L10
+  63:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 395              		.loc 1 63 6 is_stmt 1 discriminator 3 view .LVU95
+  63:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 396              		.loc 1 63 66 is_stmt 0 discriminator 3 view .LVU96
+ 397 0178 88EE880A 		vdiv.f32	s0, s17, s16
+  63:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 398              		.loc 1 63 37 discriminator 3 view .LVU97
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 11
+
+
+ 399 017c B7EEC00A 		vcvt.f64.f32	d0, s0
+ 400 0180 FFF7FEFF 		bl	atan
+ 401              	.LVL26:
+  63:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 402              		.loc 1 63 21 discriminator 3 view .LVU98
+ 403 0184 B7EEC00B 		vcvt.f32.f64	s0, d0
+ 404 0188 FFF7FEFF 		bl	get_chassis_pos
+ 405              	.LVL27:
+  63:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 406              		.loc 1 63 94 discriminator 3 view .LVU99
+ 407 018c DFED677A 		vldr.32	s15, .L49+28
+ 408 0190 20EE270A 		vmul.f32	s0, s0, s15
+  63:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 409              		.loc 1 63 100 discriminator 3 view .LVU100
+ 410 0194 9FED667A 		vldr.32	s14, .L49+32
+ 411 0198 C0EE077A 		vdiv.f32	s15, s0, s14
+  63:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 412              		.loc 1 63 19 discriminator 3 view .LVU101
+ 413 019c A500     		lsls	r5, r4, #2
+ 414 019e 5F4B     		ldr	r3, .L49+12
+ 415 01a0 03EB8403 		add	r3, r3, r4, lsl #2
+ 416 01a4 C3ED007A 		vstr.32	s15, [r3]
+  64:User/Src/control.c **** 					input_vel[i] = sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0)
+ 417              		.loc 1 64 6 is_stmt 1 discriminator 3 view .LVU102
+  64:User/Src/control.c **** 					input_vel[i] = sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0)
+ 418              		.loc 1 64 30 is_stmt 0 discriminator 3 view .LVU103
+ 419 01a8 B0EE680A 		vmov.f32	s0, s17
+ 420 01ac FFF7FEFF 		bl	f32_abs
+ 421              	.LVL28:
+  64:User/Src/control.c **** 					input_vel[i] = sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0)
+ 422              		.loc 1 64 26 discriminator 3 view .LVU104
+ 423 01b0 B0EE001B 		vmov.f64	d1, #2.0e+0
+ 424 01b4 B7EEC00A 		vcvt.f64.f32	d0, s0
+ 425 01b8 FFF7FEFF 		bl	pow
+ 426              	.LVL29:
+ 427 01bc B0EE409B 		vmov.f64	d9, d0
+  64:User/Src/control.c **** 					input_vel[i] = sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0)
+ 428              		.loc 1 64 69 discriminator 3 view .LVU105
+ 429 01c0 B0EE001B 		vmov.f64	d1, #2.0e+0
+ 430 01c4 B7EEC80A 		vcvt.f64.f32	d0, s16
+ 431 01c8 FFF7FEFF 		bl	pow
+ 432              	.LVL30:
+  64:User/Src/control.c **** 					input_vel[i] = sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0)
+ 433              		.loc 1 64 21 discriminator 3 view .LVU106
+ 434 01cc 39EE000B 		vadd.f64	d0, d9, d0
+ 435 01d0 FFF7FEFF 		bl	sqrt
+ 436              	.LVL31:
+  64:User/Src/control.c **** 					input_vel[i] = sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0)
+ 437              		.loc 1 64 101 discriminator 3 view .LVU107
+ 438 01d4 9FED4E6B 		vldr.64	d6, .L49
+ 439 01d8 80EE067B 		vdiv.f64	d7, d0, d6
+ 440 01dc B7EEC77B 		vcvt.f32.f64	s14, d7
+  64:User/Src/control.c **** 					input_vel[i] = sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0)
+ 441              		.loc 1 64 19 discriminator 3 view .LVU108
+ 442 01e0 4F4B     		ldr	r3, .L49+16
+ 443 01e2 2B44     		add	r3, r3, r5
+ 444 01e4 83ED007A 		vstr.32	s14, [r3]
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 12
+
+
+  62:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 445              		.loc 1 62 27 is_stmt 1 discriminator 3 view .LVU109
+  62:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 446              		.loc 1 62 28 is_stmt 0 discriminator 3 view .LVU110
+ 447 01e8 0134     		adds	r4, r4, #1
+ 448              	.LVL32:
+  62:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 449              		.loc 1 62 28 discriminator 3 view .LVU111
+ 450 01ea C2E7     		b	.L30
+ 451              	.LVL33:
+ 452              	.L46:
+  62:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 453              		.loc 1 62 28 discriminator 3 view .LVU112
+ 454              	.LBE8:
+  46:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) > 30){
+ 455              		.loc 1 46 58 discriminator 1 view .LVU113
+ 456 01ec DDED017A 		vldr.32	s15, [sp, #4]	@ int
+ 457 01f0 B8EE678A 		vcvt.f32.u32	s16, s15
+  46:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) > 30){
+ 458              		.loc 1 46 50 discriminator 1 view .LVU114
+ 459 01f4 DFED487A 		vldr.32	s15, .L49+8
+ 460 01f8 38EE678A 		vsub.f32	s16, s16, s15
+ 461 01fc B0EE480A 		vmov.f32	s0, s16
+ 462 0200 FFF7FEFF 		bl	f32_abs
+ 463              	.LVL34:
+  46:User/Src/control.c **** 		else if(f32_abs((float)r_info1 - 1500) < 30 && f32_abs((float)r_info2 - 1500) > 30){
+ 464              		.loc 1 46 47 discriminator 1 view .LVU115
+ 465 0204 F3EE0E7A 		vmov.f32	s15, #3.0e+1
+ 466 0208 B4EEE70A 		vcmpe.f32	s0, s15
+ 467 020c F1EE10FA 		vmrs	APSR_nzcv, FPSCR
+ 468 0210 A0DD     		ble	.L23
+  47:User/Src/control.c **** 			if((float)r_info2 - 1500 > 0){
+ 469              		.loc 1 47 4 is_stmt 1 view .LVU116
+  47:User/Src/control.c **** 			if((float)r_info2 - 1500 > 0){
+ 470              		.loc 1 47 6 is_stmt 0 view .LVU117
+ 471 0212 B5EEC08A 		vcmpe.f32	s16, #0
+ 472 0216 F1EE10FA 		vmrs	APSR_nzcv, FPSCR
+ 473 021a 01DD     		ble	.L48
+ 474              	.LBB9:
+  48:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 475              		.loc 1 48 13 view .LVU118
+ 476 021c 0023     		movs	r3, #0
+ 477 021e 17E0     		b	.L26
+ 478              	.L48:
+ 479              	.LBE9:
+ 480              	.LBB10:
+  54:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 481              		.loc 1 54 13 view .LVU119
+ 482 0220 0022     		movs	r2, #0
+ 483 0222 31E0     		b	.L27
+ 484              	.LVL35:
+ 485              	.L28:
+  54:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 486              		.loc 1 54 13 view .LVU120
+ 487              	.LBE10:
+ 488              	.LBB11:
+  49:User/Src/control.c **** 					ref_angle[i] = 0.0;
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 13
+
+
+ 489              		.loc 1 49 6 is_stmt 1 discriminator 3 view .LVU121
+  49:User/Src/control.c **** 					ref_angle[i] = 0.0;
+ 490              		.loc 1 49 19 is_stmt 0 discriminator 3 view .LVU122
+ 491 0224 3D4A     		ldr	r2, .L49+12
+ 492 0226 02EB8302 		add	r2, r2, r3, lsl #2
+ 493 022a 0021     		movs	r1, #0
+ 494 022c 1160     		str	r1, [r2]	@ float
+  50:User/Src/control.c **** 					input_vel[i] = (float)(r_info2 - 1500) / 6.25;
+ 495              		.loc 1 50 6 is_stmt 1 discriminator 3 view .LVU123
+  50:User/Src/control.c **** 					input_vel[i] = (float)(r_info2 - 1500) / 6.25;
+ 496              		.loc 1 50 37 is_stmt 0 discriminator 3 view .LVU124
+ 497 022e 019A     		ldr	r2, [sp, #4]
+ 498 0230 A2F2DC52 		subw	r2, r2, #1500
+ 499 0234 07EE902A 		vmov	s15, r2	@ int
+  50:User/Src/control.c **** 					input_vel[i] = (float)(r_info2 - 1500) / 6.25;
+ 500              		.loc 1 50 21 discriminator 3 view .LVU125
+ 501 0238 F8EE677A 		vcvt.f32.u32	s15, s15
+  50:User/Src/control.c **** 					input_vel[i] = (float)(r_info2 - 1500) / 6.25;
+ 502              		.loc 1 50 45 discriminator 3 view .LVU126
+ 503 023c F1EE096A 		vmov.f32	s13, #6.25e+0
+ 504 0240 87EEA67A 		vdiv.f32	s14, s15, s13
+  50:User/Src/control.c **** 					input_vel[i] = (float)(r_info2 - 1500) / 6.25;
+ 505              		.loc 1 50 19 discriminator 3 view .LVU127
+ 506 0244 364A     		ldr	r2, .L49+16
+ 507 0246 02EB8302 		add	r2, r2, r3, lsl #2
+ 508 024a 82ED007A 		vstr.32	s14, [r2]
+  48:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 509              		.loc 1 48 27 is_stmt 1 discriminator 3 view .LVU128
+  48:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 510              		.loc 1 48 28 is_stmt 0 discriminator 3 view .LVU129
+ 511 024e 0133     		adds	r3, r3, #1
+ 512              	.LVL36:
+ 513              	.L26:
+  48:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 514              		.loc 1 48 20 is_stmt 1 discriminator 1 view .LVU130
+  48:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 515              		.loc 1 48 5 is_stmt 0 discriminator 1 view .LVU131
+ 516 0250 022B     		cmp	r3, #2
+ 517 0252 E7DD     		ble	.L28
+ 518 0254 DDE6     		b	.L10
+ 519              	.LVL37:
+ 520              	.L29:
+  48:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 521              		.loc 1 48 5 discriminator 1 view .LVU132
+ 522              	.LBE11:
+ 523              	.LBB12:
+  55:User/Src/control.c **** 					ref_angle[i] = 0.0;
+ 524              		.loc 1 55 6 is_stmt 1 discriminator 3 view .LVU133
+  55:User/Src/control.c **** 					ref_angle[i] = 0.0;
+ 525              		.loc 1 55 19 is_stmt 0 discriminator 3 view .LVU134
+ 526 0256 314B     		ldr	r3, .L49+12
+ 527 0258 03EB8203 		add	r3, r3, r2, lsl #2
+ 528 025c 0021     		movs	r1, #0
+ 529 025e 1960     		str	r1, [r3]	@ float
+  56:User/Src/control.c **** 					input_vel[i] = -(float)(1500 - r_info2) / 6.25;
+ 530              		.loc 1 56 6 is_stmt 1 discriminator 3 view .LVU135
+  56:User/Src/control.c **** 					input_vel[i] = -(float)(1500 - r_info2) / 6.25;
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 14
+
+
+ 531              		.loc 1 56 35 is_stmt 0 discriminator 3 view .LVU136
+ 532 0260 40F2DC53 		movw	r3, #1500
+ 533 0264 0199     		ldr	r1, [sp, #4]
+ 534 0266 5B1A     		subs	r3, r3, r1
+  56:User/Src/control.c **** 					input_vel[i] = -(float)(1500 - r_info2) / 6.25;
+ 535              		.loc 1 56 22 discriminator 3 view .LVU137
+ 536 0268 07EE903A 		vmov	s15, r3	@ int
+ 537 026c F8EE677A 		vcvt.f32.u32	s15, s15
+  56:User/Src/control.c **** 					input_vel[i] = -(float)(1500 - r_info2) / 6.25;
+ 538              		.loc 1 56 21 discriminator 3 view .LVU138
+ 539 0270 F1EE677A 		vneg.f32	s15, s15
+  56:User/Src/control.c **** 					input_vel[i] = -(float)(1500 - r_info2) / 6.25;
+ 540              		.loc 1 56 46 discriminator 3 view .LVU139
+ 541 0274 F1EE096A 		vmov.f32	s13, #6.25e+0
+ 542 0278 87EEA67A 		vdiv.f32	s14, s15, s13
+  56:User/Src/control.c **** 					input_vel[i] = -(float)(1500 - r_info2) / 6.25;
+ 543              		.loc 1 56 19 discriminator 3 view .LVU140
+ 544 027c 284B     		ldr	r3, .L49+16
+ 545 027e 03EB8203 		add	r3, r3, r2, lsl #2
+ 546 0282 83ED007A 		vstr.32	s14, [r3]
+  54:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 547              		.loc 1 54 27 is_stmt 1 discriminator 3 view .LVU141
+  54:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 548              		.loc 1 54 28 is_stmt 0 discriminator 3 view .LVU142
+ 549 0286 0132     		adds	r2, r2, #1
+ 550              	.LVL38:
+ 551              	.L27:
+  54:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 552              		.loc 1 54 20 is_stmt 1 discriminator 1 view .LVU143
+  54:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 553              		.loc 1 54 5 is_stmt 0 discriminator 1 view .LVU144
+ 554 0288 022A     		cmp	r2, #2
+ 555 028a E4DD     		ble	.L29
+ 556 028c C1E6     		b	.L10
+ 557              	.LVL39:
+ 558              	.L47:
+  54:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 559              		.loc 1 54 5 discriminator 1 view .LVU145
+ 560              	.LBE12:
+ 561              	.LBB13:
+  68:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 562              		.loc 1 68 13 view .LVU146
+ 563 028e 0024     		movs	r4, #0
+ 564              	.LVL40:
+ 565              	.L31:
+  68:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 566              		.loc 1 68 20 is_stmt 1 discriminator 1 view .LVU147
+  68:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 567              		.loc 1 68 5 is_stmt 0 discriminator 1 view .LVU148
+ 568 0290 022C     		cmp	r4, #2
+ 569 0292 3FF7BEAE 		bgt	.L10
+  69:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 570              		.loc 1 69 6 is_stmt 1 discriminator 3 view .LVU149
+  69:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 571              		.loc 1 69 66 is_stmt 0 discriminator 3 view .LVU150
+ 572 0296 88EE880A 		vdiv.f32	s0, s17, s16
+  69:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 15
+
+
+ 573              		.loc 1 69 37 discriminator 3 view .LVU151
+ 574 029a B7EEC00A 		vcvt.f64.f32	d0, s0
+ 575 029e FFF7FEFF 		bl	atan
+ 576              	.LVL41:
+  69:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 577              		.loc 1 69 21 discriminator 3 view .LVU152
+ 578 02a2 B7EEC00B 		vcvt.f32.f64	s0, d0
+ 579 02a6 FFF7FEFF 		bl	get_chassis_pos
+ 580              	.LVL42:
+  69:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 581              		.loc 1 69 94 discriminator 3 view .LVU153
+ 582 02aa DFED207A 		vldr.32	s15, .L49+28
+ 583 02ae 20EE270A 		vmul.f32	s0, s0, s15
+  69:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 584              		.loc 1 69 100 discriminator 3 view .LVU154
+ 585 02b2 9FED1F7A 		vldr.32	s14, .L49+32
+ 586 02b6 C0EE077A 		vdiv.f32	s15, s0, s14
+  69:User/Src/control.c **** 					ref_angle[i] = get_chassis_pos(atan(((float)r_info1 - 1500) / ((float)r_info2 - 1500))) * 180 
+ 587              		.loc 1 69 19 discriminator 3 view .LVU155
+ 588 02ba A500     		lsls	r5, r4, #2
+ 589 02bc 174B     		ldr	r3, .L49+12
+ 590 02be 03EB8403 		add	r3, r3, r4, lsl #2
+ 591 02c2 C3ED007A 		vstr.32	s15, [r3]
+  70:User/Src/control.c **** 					input_vel[i] = -sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0
+ 592              		.loc 1 70 6 is_stmt 1 discriminator 3 view .LVU156
+  70:User/Src/control.c **** 					input_vel[i] = -sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0
+ 593              		.loc 1 70 31 is_stmt 0 discriminator 3 view .LVU157
+ 594 02c6 B0EE680A 		vmov.f32	s0, s17
+ 595 02ca FFF7FEFF 		bl	f32_abs
+ 596              	.LVL43:
+  70:User/Src/control.c **** 					input_vel[i] = -sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0
+ 597              		.loc 1 70 27 discriminator 3 view .LVU158
+ 598 02ce B0EE001B 		vmov.f64	d1, #2.0e+0
+ 599 02d2 B7EEC00A 		vcvt.f64.f32	d0, s0
+ 600 02d6 FFF7FEFF 		bl	pow
+ 601              	.LVL44:
+ 602 02da B0EE409B 		vmov.f64	d9, d0
+  70:User/Src/control.c **** 					input_vel[i] = -sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0
+ 603              		.loc 1 70 70 discriminator 3 view .LVU159
+ 604 02de B0EE001B 		vmov.f64	d1, #2.0e+0
+ 605 02e2 B7EEC80A 		vcvt.f64.f32	d0, s16
+ 606 02e6 FFF7FEFF 		bl	pow
+ 607              	.LVL45:
+  70:User/Src/control.c **** 					input_vel[i] = -sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0
+ 608              		.loc 1 70 22 discriminator 3 view .LVU160
+ 609 02ea 39EE000B 		vadd.f64	d0, d9, d0
+ 610 02ee FFF7FEFF 		bl	sqrt
+ 611              	.LVL46:
+  70:User/Src/control.c **** 					input_vel[i] = -sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0
+ 612              		.loc 1 70 21 discriminator 3 view .LVU161
+ 613 02f2 B1EE400B 		vneg.f64	d0, d0
+  70:User/Src/control.c **** 					input_vel[i] = -sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0
+ 614              		.loc 1 70 102 discriminator 3 view .LVU162
+ 615 02f6 9FED066B 		vldr.64	d6, .L49
+ 616 02fa 80EE067B 		vdiv.f64	d7, d0, d6
+ 617 02fe B7EEC77B 		vcvt.f32.f64	s14, d7
+  70:User/Src/control.c **** 					input_vel[i] = -sqrt(pow(f32_abs((float)r_info1 - 1500), 2.0) + pow((float)r_info2 - 1500, 2.0
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 16
+
+
+ 618              		.loc 1 70 19 discriminator 3 view .LVU163
+ 619 0302 074B     		ldr	r3, .L49+16
+ 620 0304 2B44     		add	r3, r3, r5
+ 621 0306 83ED007A 		vstr.32	s14, [r3]
+  68:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 622              		.loc 1 68 27 is_stmt 1 discriminator 3 view .LVU164
+  68:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 623              		.loc 1 68 28 is_stmt 0 discriminator 3 view .LVU165
+ 624 030a 0134     		adds	r4, r4, #1
+ 625              	.LVL47:
+  68:User/Src/control.c **** 				for(int i = 0; i < 3; i++){
+ 626              		.loc 1 68 28 discriminator 3 view .LVU166
+ 627 030c C0E7     		b	.L31
+ 628              	.L50:
+ 629 030e 00BF     		.align	3
+ 630              	.L49:
+ 631 0310 295C8FC2 		.word	-1030792151
+ 632 0314 F5A82140 		.word	1075947765
+ 633 0318 0080BB44 		.word	1153138688
+ 634 031c 00000000 		.word	.LANCHOR2
+ 635 0320 00000000 		.word	input_vel
+ 636 0324 0000B442 		.word	1119092736
+ 637 0328 0000B4C2 		.word	-1028390912
+ 638 032c 00003443 		.word	1127481344
+ 639 0330 DB0F4940 		.word	1078530011
+ 640              	.LBE13:
+ 641              		.cfi_endproc
+ 642              	.LFE185:
+ 644              		.section	.text.cmd_all,"ax",%progbits
+ 645              		.align	1
+ 646              		.global	cmd_all
+ 647              		.syntax unified
+ 648              		.thumb
+ 649              		.thumb_func
+ 650              		.fpu fpv5-d16
+ 652              	cmd_all:
+ 653              	.LVL48:
+ 654              	.LFB186:
+  78:User/Src/control.c **** void cmd_all(float32_t ref_angle[], float input_vel[]){
+ 655              		.loc 1 78 55 is_stmt 1 view -0
+ 656              		.cfi_startproc
+ 657              		@ args = 0, pretend = 0, frame = 0
+ 658              		@ frame_needed = 0, uses_anonymous_args = 0
+  78:User/Src/control.c **** void cmd_all(float32_t ref_angle[], float input_vel[]){
+ 659              		.loc 1 78 55 is_stmt 0 view .LVU168
+ 660 0000 F8B5     		push	{r3, r4, r5, r6, r7, lr}
+ 661              	.LCFI7:
+ 662              		.cfi_def_cfa_offset 24
+ 663              		.cfi_offset 3, -24
+ 664              		.cfi_offset 4, -20
+ 665              		.cfi_offset 5, -16
+ 666              		.cfi_offset 6, -12
+ 667              		.cfi_offset 7, -8
+ 668              		.cfi_offset 14, -4
+ 669 0002 0746     		mov	r7, r0
+ 670 0004 0E46     		mov	r6, r1
+  79:User/Src/control.c **** 	for(int i = 0; i<3; i++){
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 17
+
+
+ 671              		.loc 1 79 2 is_stmt 1 view .LVU169
+ 672              	.LBB14:
+  79:User/Src/control.c **** 	for(int i = 0; i<3; i++){
+ 673              		.loc 1 79 6 view .LVU170
+ 674              	.LVL49:
+  79:User/Src/control.c **** 	for(int i = 0; i<3; i++){
+ 675              		.loc 1 79 10 is_stmt 0 view .LVU171
+ 676 0006 0024     		movs	r4, #0
+  79:User/Src/control.c **** 	for(int i = 0; i<3; i++){
+ 677              		.loc 1 79 2 view .LVU172
+ 678 0008 1AE0     		b	.L52
+ 679              	.LVL50:
+ 680              	.L53:
+  80:User/Src/control.c **** 		motor[i].target_angle = get_chassis_pos(ref_angle[i]*120);
+ 681              		.loc 1 80 3 is_stmt 1 discriminator 3 view .LVU173
+  80:User/Src/control.c **** 		motor[i].target_angle = get_chassis_pos(ref_angle[i]*120);
+ 682              		.loc 1 80 52 is_stmt 0 discriminator 3 view .LVU174
+ 683 000a A500     		lsls	r5, r4, #2
+ 684 000c 07EB8403 		add	r3, r7, r4, lsl #2
+ 685 0010 93ED000A 		vldr.32	s0, [r3]
+  80:User/Src/control.c **** 		motor[i].target_angle = get_chassis_pos(ref_angle[i]*120);
+ 686              		.loc 1 80 27 discriminator 3 view .LVU175
+ 687 0014 DFED127A 		vldr.32	s15, .L55
+ 688 0018 20EE270A 		vmul.f32	s0, s0, s15
+ 689 001c FFF7FEFF 		bl	get_chassis_pos
+ 690              	.LVL51:
+  80:User/Src/control.c **** 		motor[i].target_angle = get_chassis_pos(ref_angle[i]*120);
+ 691              		.loc 1 80 25 discriminator 3 view .LVU176
+ 692 0020 04EBC402 		add	r2, r4, r4, lsl #3
+ 693 0024 0F4B     		ldr	r3, .L55+4
+ 694 0026 03EB8203 		add	r3, r3, r2, lsl #2
+ 695 002a 83ED040A 		vstr.32	s0, [r3, #16]
+  81:User/Src/control.c **** 		odrive_set_axis[i].input_vel = input_vel[i];
+ 696              		.loc 1 81 3 is_stmt 1 discriminator 3 view .LVU177
+  81:User/Src/control.c **** 		odrive_set_axis[i].input_vel = input_vel[i];
+ 697              		.loc 1 81 43 is_stmt 0 discriminator 3 view .LVU178
+ 698 002e 3544     		add	r5, r5, r6
+ 699 0030 2A68     		ldr	r2, [r5]	@ float
+  81:User/Src/control.c **** 		odrive_set_axis[i].input_vel = input_vel[i];
+ 700              		.loc 1 81 32 discriminator 3 view .LVU179
+ 701 0032 C4EBC401 		rsb	r1, r4, r4, lsl #3
+ 702 0036 0C4B     		ldr	r3, .L55+8
+ 703 0038 03EBC103 		add	r3, r3, r1, lsl #3
+ 704 003c 9A61     		str	r2, [r3, #24]	@ float
+  79:User/Src/control.c **** 	for(int i = 0; i<3; i++){
+ 705              		.loc 1 79 22 is_stmt 1 discriminator 3 view .LVU180
+  79:User/Src/control.c **** 	for(int i = 0; i<3; i++){
+ 706              		.loc 1 79 23 is_stmt 0 discriminator 3 view .LVU181
+ 707 003e 0134     		adds	r4, r4, #1
+ 708              	.LVL52:
+ 709              	.L52:
+  79:User/Src/control.c **** 	for(int i = 0; i<3; i++){
+ 710              		.loc 1 79 17 is_stmt 1 discriminator 1 view .LVU182
+  79:User/Src/control.c **** 	for(int i = 0; i<3; i++){
+ 711              		.loc 1 79 2 is_stmt 0 discriminator 1 view .LVU183
+ 712 0040 022C     		cmp	r4, #2
+ 713 0042 E2DD     		ble	.L53
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 18
+
+
+ 714              	.LBE14:
+  83:User/Src/control.c **** 	odrv_write_msg(AXIS_0, MSG_SET_INPUT_VEL);
+ 715              		.loc 1 83 2 is_stmt 1 view .LVU184
+ 716 0044 0D21     		movs	r1, #13
+ 717 0046 0020     		movs	r0, #0
+ 718 0048 FFF7FEFF 		bl	odrv_write_msg
+ 719              	.LVL53:
+  84:User/Src/control.c **** 	odrv_write_msg(AXIS_1, MSG_SET_INPUT_VEL);
+ 720              		.loc 1 84 2 view .LVU185
+ 721 004c 0D21     		movs	r1, #13
+ 722 004e 0120     		movs	r0, #1
+ 723 0050 FFF7FEFF 		bl	odrv_write_msg
+ 724              	.LVL54:
+  85:User/Src/control.c **** 	odrv_write_msg(AXIS_2, MSG_SET_INPUT_VEL);
+ 725              		.loc 1 85 2 view .LVU186
+ 726 0054 0D21     		movs	r1, #13
+ 727 0056 0220     		movs	r0, #2
+ 728 0058 FFF7FEFF 		bl	odrv_write_msg
+ 729              	.LVL55:
+  86:User/Src/control.c **** }
+ 730              		.loc 1 86 1 is_stmt 0 view .LVU187
+ 731 005c F8BD     		pop	{r3, r4, r5, r6, r7, pc}
+ 732              	.LVL56:
+ 733              	.L56:
+  86:User/Src/control.c **** }
+ 734              		.loc 1 86 1 view .LVU188
+ 735 005e 00BF     		.align	2
+ 736              	.L55:
+ 737 0060 0000F042 		.word	1123024896
+ 738 0064 00000000 		.word	motor
+ 739 0068 00000000 		.word	odrive_set_axis
+ 740              		.cfi_endproc
+ 741              	.LFE186:
+ 743              		.global	ref_angle
+ 744              		.global	chassis_pos
+ 745              		.global	target_speed
+ 746              		.global	last_info
+ 747              		.global	target_angle1
+ 748              		.global	temp
+ 749              		.global	last_angle1
+ 750              		.section	.bss.chassis_pos,"aw",%nobits
+ 751              		.align	2
+ 752              		.set	.LANCHOR1,. + 0
+ 755              	chassis_pos:
+ 756 0000 00000000 		.space	4
+ 757              		.section	.bss.last_angle1,"aw",%nobits
+ 758              		.align	2
+ 761              	last_angle1:
+ 762 0000 00000000 		.space	4
+ 763              		.section	.bss.ref_angle,"aw",%nobits
+ 764              		.align	2
+ 765              		.set	.LANCHOR2,. + 0
+ 768              	ref_angle:
+ 769 0000 00000000 		.space	12
+ 769      00000000 
+ 769      00000000 
+ 770              		.section	.bss.target_angle1,"aw",%nobits
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 19
+
+
+ 771              		.align	2
+ 774              	target_angle1:
+ 775 0000 00000000 		.space	4
+ 776              		.section	.bss.target_speed,"aw",%nobits
+ 777              		.align	2
+ 778              		.set	.LANCHOR0,. + 0
+ 781              	target_speed:
+ 782 0000 00000000 		.space	12
+ 782      00000000 
+ 782      00000000 
+ 783              		.section	.bss.temp,"aw",%nobits
+ 784              		.align	2
+ 787              	temp:
+ 788 0000 00000000 		.space	4
+ 789              		.section	.data.last_info,"aw"
+ 790              		.align	2
+ 793              	last_info:
+ 794 0000 0060BB44 		.word	1153130496
+ 795              		.text
+ 796              	.Letext0:
+ 797              		.file 2 "c:\\program files (x86)\\gnu arm embedded toolchain\\10 2021.07\\arm-none-eabi\\include\\
+ 798              		.file 3 "c:\\program files (x86)\\gnu arm embedded toolchain\\10 2021.07\\arm-none-eabi\\include\\
+ 799              		.file 4 "Drivers/CMSIS/DSP/Include/arm_math.h"
+ 800              		.file 5 "User/Inc/bsp_can.h"
+ 801              		.file 6 "User/Inc/motor.h"
+ 802              		.file 7 "User/Inc/control.h"
+ 803              		.file 8 "c:\\program files (x86)\\gnu arm embedded toolchain\\10 2021.07\\arm-none-eabi\\include\\
+ARM GAS  C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s 			page 20
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 control.c
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:17     .text.chassis_init:00000000 $t
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:25     .text.chassis_init:00000000 chassis_init
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:88     .text.chassis_init:00000038 $d
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:96     .text.get_chassis_pos:00000000 $t
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:103    .text.get_chassis_pos:00000000 get_chassis_pos
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:121    .text.get_chassis_pos:00000008 $d
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:126    .text.func1:00000000 $t
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:133    .text.func1:00000000 func1
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:631    .text.func1:00000310 $d
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:645    .text.cmd_all:00000000 $t
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:652    .text.cmd_all:00000000 cmd_all
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:737    .text.cmd_all:00000060 $d
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:768    .bss.ref_angle:00000000 ref_angle
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:755    .bss.chassis_pos:00000000 chassis_pos
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:781    .bss.target_speed:00000000 target_speed
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:793    .data.last_info:00000000 last_info
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:774    .bss.target_angle1:00000000 target_angle1
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:787    .bss.temp:00000000 temp
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:761    .bss.last_angle1:00000000 last_angle1
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:751    .bss.chassis_pos:00000000 $d
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:758    .bss.last_angle1:00000000 $d
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:764    .bss.ref_angle:00000000 $d
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:771    .bss.target_angle1:00000000 $d
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:777    .bss.target_speed:00000000 $d
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:784    .bss.temp:00000000 $d
+C:\Users\Joknem\AppData\Local\Temp\ccspcIut.s:790    .data.last_info:00000000 $d
+
+UNDEFINED SYMBOLS
+set_speed
+angle_detect
+mode_flag
+motor
+f32_abs
+atan
+pow
+sqrt
+input_vel
+odrv_write_msg
+odrive_set_axis

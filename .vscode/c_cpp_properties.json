@@ -1,0 +1,29 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "Core/Inc",
+                "Drivers/STM32H7xx_HAL_Driver/Inc",
+                "Drivers/STM32H7xx_HAL_Driver/Inc/Legacy",
+                "Middlewares/Third_Party/FreeRTOS/Source/include",
+                "Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2",
+                "Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
+                "Drivers/CMSIS/Device/ST/STM32H7xx/Include",
+                "Drivers/CMSIS/Include",
+                "Drivers/CMSIS/DSP/Include",
+                "User/Inc"
+            ],
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32H743xx",
+                "ARM_MATH_CM7"
+            ],
+            "compilerPath": "c:/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.07/bin/arm-none-eabi-gcc.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-arm"
+        }
+    ],
+    "version": 4
+}

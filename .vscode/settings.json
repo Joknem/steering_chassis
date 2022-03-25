@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "arm_math.h": "c",
+        "log.h": "c",
+        "bsp_can.h": "c",
+        "motor.h": "c",
+        "main.h": "c",
+        "freertos.h": "c",
+        "task.h": "c",
+        "cmsis_os.h": "c"
+    }
+}
